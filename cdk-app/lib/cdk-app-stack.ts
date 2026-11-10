@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaDestinations from 'aws-cdk-lib/aws-s3-notifications';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -50,6 +51,43 @@ export class CdkAppStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(15),
     });
 
+    const postgresLayer = new lambda.LayerVersion(this, 'PostgresLayer', {
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_12],
+      description: 'psycopg2 dependency for the PostgreSQL reader Lambda',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/postgres-layer'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+          command: [
+            'bash',
+            '-c',
+            'mkdir -p /asset-output/python && pip install -r requirements.txt -t /asset-output/python',
+          ],
+        },
+      }),
+    });
+
+    const postgresSecretName = 'practice-postgres-credentials';
+    const postgresSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'PostgresCredentials',
+      postgresSecretName,
+    );
+    const dbFunction = new lambda.Function(this, 'PostgresReaderFunction', {
+      functionName: 'practice-postgres-reader',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'handler.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/postgres')),
+      layers: [postgresLayer],
+      environment: {
+        DB_SECRET_ID: postgresSecretName,
+        ...(process.env.FLOCI_INTERNAL_ENDPOINT
+          ? { SECRETS_MANAGER_ENDPOINT: process.env.FLOCI_INTERNAL_ENDPOINT }
+          : {}),
+      },
+      timeout: cdk.Duration.seconds(15),
+    });
+    postgresSecret.grantRead(dbFunction);
+
     bucket.grantReadWrite(fn);
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
@@ -59,5 +97,6 @@ export class CdkAppStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BucketName', { value: bucket.bucketName });
     new cdk.CfnOutput(this, 'FunctionName', { value: fn.functionName });
     new cdk.CfnOutput(this, 'HttpbinFunctionName', { value: httpbinFunction.functionName });
+    new cdk.CfnOutput(this, 'PostgresFunctionName', { value: dbFunction.functionName });
   }
 }

@@ -40,3 +40,36 @@ test('HTTP GET Lambda is defined with the expected runtime and timeout', () => {
     CompatibleRuntimes: ['python3.12'],
   });
 });
+
+test('PostgreSQL reader Lambda uses a layer and has read access to its secret', () => {
+  const app = new cdk.App();
+  const stack = new CdkAppStack(app, 'PostgresTestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: 'practice-postgres-reader',
+    Handler: 'handler.lambda_handler',
+    Runtime: 'python3.12',
+    Timeout: 15,
+    Layers: Match.anyValue(),
+    Environment: {
+      Variables: Match.objectLike({
+        DB_SECRET_ID: 'practice-postgres-credentials',
+      }),
+    },
+  });
+  template.hasResourceProperties('AWS::Lambda::LayerVersion', {
+    CompatibleRuntimes: ['python3.12'],
+    Description: 'psycopg2 dependency for the PostgreSQL reader Lambda',
+  });
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {
+      Statement: Match.arrayWith([
+        Match.objectLike({
+          Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+          Effect: 'Allow',
+        }),
+      ]),
+    },
+  });
+});
