@@ -26,6 +26,30 @@ export class CdkAppStack extends cdk.Stack {
       },
     });
 
+    const urllib3Layer = new lambda.LayerVersion(this, 'Urllib3Layer', {
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_12],
+      description: 'urllib3 dependency for the httpbin Lambda',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/urllib3-layer'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+          command: [
+            'bash',
+            '-c',
+            'mkdir -p /asset-output/python && pip install -r requirements.txt -t /asset-output/python',
+          ],
+        },
+      }),
+    });
+
+    const httpbinFunction = new lambda.Function(this, 'HttpbinFunction', {
+      functionName: 'httpbin-get',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'handler.lambda_handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/httpbin')),
+      layers: [urllib3Layer],
+      timeout: cdk.Duration.seconds(15),
+    });
+
     bucket.grantReadWrite(fn);
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
@@ -34,5 +58,6 @@ export class CdkAppStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'BucketName', { value: bucket.bucketName });
     new cdk.CfnOutput(this, 'FunctionName', { value: fn.functionName });
+    new cdk.CfnOutput(this, 'HttpbinFunctionName', { value: httpbinFunction.functionName });
   }
 }

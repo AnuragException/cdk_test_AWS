@@ -11,15 +11,32 @@ test('S3 object creation invokes the Lambda function', () => {
     Handler: 'handler.lambda_handler',
     Runtime: 'python3.12',
   });
-  template.hasResourceProperties('AWS::S3::Bucket', {
+  template.hasResourceProperties('Custom::S3BucketNotifications', {
     NotificationConfiguration: Match.objectLike({
-      LambdaConfigurations: Match.arrayWith([
-        Match.objectLike({ Event: 's3:ObjectCreated:*' }),
+      LambdaFunctionConfigurations: Match.arrayWith([
+        Match.objectLike({ Events: ['s3:ObjectCreated:*'] }),
       ]),
     }),
   });
   template.hasResourceProperties('AWS::Lambda::Permission', {
     Action: 'lambda:InvokeFunction',
     Principal: 's3.amazonaws.com',
+  });
+});
+
+test('HTTP GET Lambda is defined with the expected runtime and timeout', () => {
+  const app = new cdk.App();
+  const stack = new CdkAppStack(app, 'HttpbinTestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: 'httpbin-get',
+    Handler: 'handler.lambda_handler',
+    Runtime: 'python3.12',
+    Timeout: 15,
+    Layers: Match.anyValue(),
+  });
+  template.hasResourceProperties('AWS::Lambda::LayerVersion', {
+    CompatibleRuntimes: ['python3.12'],
   });
 });
