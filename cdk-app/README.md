@@ -1,17 +1,18 @@
-# Welcome to your CDK TypeScript project
+# CDK app
 
-This is a blank project for CDK development with TypeScript.
-
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+This TypeScript CDK stack defines the local AWS learning resources documented
+in the [project README](../README.md).
 
 ## Useful commands
 
 * `npm run build`   type-check the project
 * `npm run watch`   watch for changes and type-check
 * `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+* `npm exec -- cdklocal synth`   synthesize the local Floci template
+* `npm exec -- cdklocal deploy` deploy this stack to Floci
+
+Use the standard `cdk` CLI only when intentionally targeting AWS; deployment
+there can create billable resources.
 
 ## EC2 learning instance
 
@@ -24,7 +25,8 @@ IMDSv2 and has a public IP for outbound connectivity.
 
 For Floci compatibility, CDK does not create its custom resource that removes
 the default security group's rules. The EC2 instance uses a separate security
-group, and no inbound rules are added to it.
+group, which has no ingress rules by default; optional SSH and API rules are
+added only when their CIDR settings are provided.
 
 The instance type is `t3.micro`. In real AWS, the instance and its networking
 resources can incur charges while provisioned. The Floci deployment emulates
@@ -54,8 +56,12 @@ replacement so the setup script runs on a fresh instance.
   `humidity_percent`.
 
 The API does not fetch real weather; add sample observations with POST requests.
-Port 8080 is opened only when `EC2_API_CIDR` (or `EC2_SSH_CIDR`) is set. Floci
-publishes it on a host port in the 30000–30999 range.
+Port 8080 is opened in the CDK security group only when `EC2_API_CIDR` (or
+`EC2_SSH_CIDR`) is set. In the current Floci setup, the instance was reported
+with Floci's default security group and Docker did not publish port 8080 to a
+host port. The API was reachable from WSL through the EC2 container's Docker
+bridge IP. For Windows Postman, a local WSL `socat` forwarder can expose it at
+`localhost:8080`; see the project README.
 
 The `weather-api-proxy` Lambda forwards GET requests to the EC2 API. Set
 `WEATHER_API_URL` to an address reachable from the Lambda container before
